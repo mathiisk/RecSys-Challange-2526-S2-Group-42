@@ -132,26 +132,26 @@ def main(bpr_epochs: int = 150, gru_epochs: int = 150, lightgcn_epochs: int = 20
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--bpr-epochs", type=int, default=30)
-    parser.add_argument("--gru-epochs", type=int, default=20)
+    parser.add_argument("--bpr-epochs", type=int, default=100)
+    parser.add_argument("--gru-epochs", type=int, default=100)
     parser.add_argument("--lightgcn-epochs", type=int, default=20)
-    parser.add_argument("--bpr-dim", type=int, default=64)
+    parser.add_argument("--bpr-dim", type=int, default=256)
     parser.add_argument("--gru-embed-dim", type=int, default=64)
     parser.add_argument("--gru-hidden-dim", type=int, default=64)
-    parser.add_argument("--gru-max-seq-len", type=int, default=50)
+    parser.add_argument("--gru-max-seq-len", type=int, default=100)
     parser.add_argument("--lightgcn-dim", type=int, default=128)
     parser.add_argument("--save", type=Path, default=None)
-    parser.add_argument("--load", type=Path, default=None, help="load existing checkpoint to skip retraining bpr and gru")
+    parser.add_argument("--load", type=Path, default=None)
     args = parser.parse_args()
 
     main(
         bpr_epochs=args.bpr_epochs,
         gru_epochs=args.gru_epochs,
-        lightgcn_epochs=args.lightgcn_epochs,
+        # lightgcn_epochs=args.lightgcn_epochs,
         bpr_dim=args.bpr_dim,
         gru_embed_dim=args.gru_embed_dim,
         gru_hidden_dim=args.gru_hidden_dim,
         gru_max_seq_len=args.gru_max_seq_len,
-        lightgcn_dim=args.lightgcn_dim,      
+        # lightgcn_dim=args.lightgcn_dim,      
         save_dir=args.save,
     )

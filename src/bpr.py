@@ -84,8 +84,8 @@ def sample_negatives(users: np.ndarray, user_pos: dict, n_items: int) -> np.ndar
     return neg
 
 
-def train_bpr(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 64, n_epochs: int = 20, batch_size: int = 1024,
-    lr: float = 1e-3, weight_decay: float = 1e-5, device: str = "cpu", verbose: bool = True) -> BPRMF:
+def train_bpr(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 256, n_epochs: int = 100, batch_size: int = 1024,
+    lr: float = 5e-4, weight_decay: float = 1e-6, device: str = "cpu", verbose: bool = True) -> BPRMF:
     """Train a BPR-MF model on (user, item) interactions.
 
     Args:
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"device: {device}")
 
-    model = train_bpr(train_df, n_users, n_items, dim=64, n_epochs=20, batch_size=1024, lr=1e-3, weight_decay=1e-5, device=device)
+    model = train_bpr(train_df, n_users, n_items, dim=256, n_epochs=100, batch_size=1024, lr=5e-4, weight_decay=1e-6, device=device)
 
     rec = BPRRecommender(model, device=device)
     recommend_fn = lambda user_id, seen_items, k: rec.recommend(user_id, seen_items, k)

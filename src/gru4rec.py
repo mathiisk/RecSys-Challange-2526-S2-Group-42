@@ -17,27 +17,14 @@ class GRU4Rec(nn.Module):
     Index 0 in the item table is reserved for padding.
     """
 
-    def __init__(
-        self,
-        n_items: int,
-        embed_dim: int = 64,
-        hidden_dim: int = 64,
-        num_layers: int = 1,
-        dropout: float = 0.2,
-    ):
+    def __init__(self, n_items: int, embed_dim: int = 64, hidden_dim: int = 64, num_layers: int = 1, dropout: float = 0.3):
         super().__init__()
         self.n_items = n_items
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim
         self.item_emb = nn.Embedding(n_items + 1, embed_dim, padding_idx=0)
         self.item_bias = nn.Embedding(n_items + 1, 1, padding_idx=0)
-        self.gru = nn.GRU(
-            embed_dim,
-            hidden_dim,
-            num_layers=num_layers,
-            dropout=dropout if num_layers > 1 else 0.0,
-            batch_first=True,
-        )
+        self.gru = nn.GRU(embed_dim, hidden_dim, num_layers=num_layers, dropout=dropout if num_layers > 1 else 0.0, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         self.proj = nn.Linear(hidden_dim, embed_dim)
 
@@ -70,9 +57,7 @@ class GRU4Rec(nn.Module):
         return self._logits_from_hidden(h_proj).squeeze(0)
 
 
-def build_user_sequences(
-    train_df: pd.DataFrame, max_seq_len: int = 50
-) -> dict[int, list[int]]:
+def build_user_sequences(train_df: pd.DataFrame, max_seq_len: int = 100) -> dict[int, list[int]]:
     """Per-user item sequence sorted by timestamp, capped at max_seq_len (keep most recent)."""
     sequences: dict[int, list[int]] = {}
     sorted_df = train_df.sort_values("timestamp")
@@ -84,21 +69,8 @@ def build_user_sequences(
     return sequences
 
 
-def train_gru4rec(
-    train_df: pd.DataFrame,
-    n_items: int,
-    embed_dim: int = 64,
-    hidden_dim: int = 64,
-    num_layers: int = 1,
-    dropout: float = 0.2,
-    max_seq_len: int = 50,
-    n_epochs: int = 20,
-    batch_size: int = 256,
-    lr: float = 1e-3,
-    weight_decay: float = 1e-5,
-    device: str = "cpu",
-    verbose: bool = True,
-) -> tuple[GRU4Rec, dict[int, list[int]]]:
+def train_gru4rec(train_df: pd.DataFrame, n_items: int, embed_dim: int = 64, hidden_dim: int = 64, num_layers: int = 1, dropout: float = 0.3, max_seq_len: int = 100,
+    n_epochs: int = 100, batch_size: int = 1024, lr: float = 5e-4, weight_decay: float = 1e-6, device: str = "cpu", verbose: bool = True) -> tuple[GRU4Rec, dict[int, list[int]]]:
     """Train GRU4Rec with next-item cross-entropy.
 
     Returns: (model, full per-user sequences) — sequences are reused at inference.
@@ -127,11 +99,7 @@ def train_gru4rec(
             tgt = pad_sequence(tgt, batch_first=True, padding_value=0).to(device)
 
             logits = model(inp)
-            loss = F.cross_entropy(
-                logits.view(-1, n_items + 1),
-                tgt.view(-1),
-                ignore_index=0,
-            )
+            loss = F.cross_entropy(logits.view(-1, n_items + 1), tgt.view(-1), ignore_index=0)
 
             optimizer.zero_grad()
             loss.backward()
@@ -153,12 +121,7 @@ def train_gru4rec(
 class GRU4RecRecommender:
     """Wraps a trained GRU4Rec as a `(user_id, seen_items, k) -> list[int]` callable."""
 
-    def __init__(
-        self,
-        model: GRU4Rec,
-        sequences: dict[int, list[int]],
-        device: str = "cpu",
-    ):
+    def __init__(self, model: GRU4Rec, sequences: dict[int, list[int]], device: str = "cpu"):
         self.model = model.eval()
         self.sequences = sequences
         self.device = device
@@ -227,9 +190,9 @@ if __name__ == "__main__":
 
     model, sequences = train_gru4rec(
         train_df, n_items,
-        embed_dim=64, hidden_dim=64, num_layers=1, dropout=0.2,
-        max_seq_len=50, n_epochs=20, batch_size=256,
-        lr=1e-3, weight_decay=1e-5, device=device,
+        embed_dim=64, hidden_dim=64, num_layers=1, dropout=0.3,
+        max_seq_len=100, n_epochs=100, batch_size=1024,
+        lr=5e-4, weight_decay=1e-6, device=device,
     )
 
     rec = GRU4RecRecommender(model, sequences, device=device)
