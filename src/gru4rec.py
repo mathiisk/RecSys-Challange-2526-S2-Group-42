@@ -97,16 +97,12 @@ def train_gru4rec(
     lr: float = 1e-3,
     weight_decay: float = 1e-5,
     device: str = "cpu",
-    seed: int = 42,
     verbose: bool = True,
 ) -> tuple[GRU4Rec, dict[int, list[int]]]:
     """Train GRU4Rec with next-item cross-entropy.
 
     Returns: (model, full per-user sequences) — sequences are reused at inference.
     """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-
     sequences = build_user_sequences(train_df, max_seq_len=max_seq_len)
     train_seqs = {u: s for u, s in sequences.items() if len(s) >= 2}
     train_users = list(train_seqs.keys())
@@ -115,10 +111,8 @@ def train_gru4rec(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     n_samples = len(train_users)
-    rng = np.random.default_rng(seed)
 
     for epoch in range(n_epochs):
-        rng.shuffle(train_users)
 
         model.train()
         total_loss = 0.0

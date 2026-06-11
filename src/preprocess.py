@@ -31,12 +31,7 @@ def deduplicate_interactions(interactions_df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Deduplicated interactions
     """
     before = len(interactions_df)
-    interactions_df = (
-        interactions_df
-        .sort_values("timestamp")
-        .drop_duplicates(subset=["user_id", "item_id"], keep="last")
-        .reset_index(drop=True)
-    )
+    interactions_df = interactions_df.drop_duplicates(subset=["user_id", "item_id", "timestamp"]).reset_index(drop=True)
     print(f"{before} to {len(interactions_df)} rows")
     return interactions_df
 
@@ -80,7 +75,7 @@ def save_processed(train_split_df: pd.DataFrame, val_df: pd.DataFrame, test_df: 
     
 if __name__ == "__main__":
     train_df, test_df, item_meta_df = load_raw_data(DATA_DIR)
-    train_df = deduplicate_interactions(train_df)
+    # train_df = deduplicate_interactions(train_df)
     train_split_df, val_df = split_leave_one_out(train_df)
     save_processed(train_split_df, val_df, test_df, OUTPUT_DIR)
 

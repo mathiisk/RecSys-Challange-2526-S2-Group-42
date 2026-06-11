@@ -85,7 +85,7 @@ def sample_negatives(users: np.ndarray, user_pos: dict, n_items: int) -> np.ndar
 
 
 def train_bpr(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 64, n_epochs: int = 20, batch_size: int = 1024,
-    lr: float = 1e-3, weight_decay: float = 1e-5, device: str = "cpu", seed: int = 42, verbose: bool = True) -> BPRMF:
+    lr: float = 1e-3, weight_decay: float = 1e-5, device: str = "cpu", verbose: bool = True) -> BPRMF:
     """Train a BPR-MF model on (user, item) interactions.
 
     Args:
@@ -104,8 +104,6 @@ def train_bpr(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 64,
     Returns:
         (BPRMF): Trained model on the requested device.
     """
-    torch.manual_seed(seed)
-    np.random.seed(seed)
 
     model = BPRMF(n_users, n_items, dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
