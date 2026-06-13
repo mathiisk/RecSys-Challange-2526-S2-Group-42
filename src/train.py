@@ -147,11 +147,11 @@ if __name__ == "__main__":
     main(
         bpr_epochs=args.bpr_epochs,
         gru_epochs=args.gru_epochs,
-        # lightgcn_epochs=args.lightgcn_epochs,
+        lightgcn_epochs=args.lightgcn_epochs,
         bpr_dim=args.bpr_dim,
         gru_embed_dim=args.gru_embed_dim,
         gru_hidden_dim=args.gru_hidden_dim,
         gru_max_seq_len=args.gru_max_seq_len,
-        # lightgcn_dim=args.lightgcn_dim,      
+        lightgcn_dim=args.lightgcn_dim,      
         save_dir=args.save,
     )
