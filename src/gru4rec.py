@@ -18,6 +18,15 @@ class GRU4Rec(nn.Module):
     """
 
     def __init__(self, n_items: int, embed_dim: int = 64, hidden_dim: int = 64, num_layers: int = 1, dropout: float = 0.3):
+        """Initialize embedding tables, GRU, and output projection.
+
+        Args:
+            n_items (int): Maximum item ID in the data.
+            embed_dim (int): Item embedding dimension.
+            hidden_dim (int): GRU hidden state dimension.
+            num_layers (int): Number of GRU layers.
+            dropout (float): Dropout probability applied to embeddings and between GRU layers.
+        """
         super().__init__()
         self.n_items = n_items
         self.embed_dim = embed_dim
@@ -34,11 +43,25 @@ class GRU4Rec(nn.Module):
             self.item_emb.weight[0].zero_()
 
     def _logits_from_hidden(self, h_proj: torch.Tensor) -> torch.Tensor:
-        """Apply tied output + item bias. h_proj: (..., embed_dim) -> (..., n_items+1)."""
+        """Apply the tied output projection and item bias to get item logits.
+
+        Args:
+            h_proj (torch.Tensor): Projected hidden states, shape (..., embed_dim).
+
+        Returns:
+            (torch.Tensor): Logits over all items, shape (..., n_items + 1).
+        """
         return h_proj @ self.item_emb.weight.T + self.item_bias.weight.squeeze(-1)
 
     def forward(self, seq: torch.Tensor) -> torch.Tensor:
-        """seq: (B, L) item indices. Returns: (B, L, n_items+1) logits at every position."""
+        """Compute next-item logits at every position of the input sequences.
+
+        Args:
+            seq (torch.Tensor): Item index sequences, shape (B, L).
+
+        Returns:
+            (torch.Tensor): Logits at every position, shape (B, L, n_items + 1).
+        """
         x = self.item_emb(seq)
         x = self.dropout(x)
         h, _ = self.gru(x)
@@ -47,9 +70,13 @@ class GRU4Rec(nn.Module):
 
     @torch.no_grad()
     def score_last(self, seq: torch.Tensor) -> torch.Tensor:
-        """Score every item from a single sequence's last hidden state.
+        """Score every item using the hidden state from the end of a single sequence.
 
-        seq: (1, L) item indices, no padding. Returns: (n_items+1,) scores.
+        Args:
+            seq (torch.Tensor): Item index sequence with no padding, shape (1, L).
+
+        Returns:
+            (torch.Tensor): 1D tensor of length n_items + 1.
         """
         x = self.item_emb(seq)
         h, _ = self.gru(x)
@@ -58,7 +85,15 @@ class GRU4Rec(nn.Module):
 
 
 def build_user_sequences(train_df: pd.DataFrame, max_seq_len: int = 100) -> dict[int, list[int]]:
-    """Per-user item sequence sorted by timestamp, capped at max_seq_len (keep most recent)."""
+    """Build per-user item sequences ordered by timestamp, capped to the most recent items.
+
+    Args:
+        train_df (pd.DataFrame): Interactions with columns [user_id, item_id, timestamp].
+        max_seq_len (int): Maximum sequence length; longer sequences keep only the most recent items.
+
+    Returns:
+        (dict[int, list[int]]): Mapping of user_id -> ordered list of item IDs.
+    """
     sequences: dict[int, list[int]] = {}
     sorted_df = train_df.sort_values("timestamp")
     for user_id, group in sorted_df.groupby("user_id"):
@@ -71,9 +106,26 @@ def build_user_sequences(train_df: pd.DataFrame, max_seq_len: int = 100) -> dict
 
 def train_gru4rec(train_df: pd.DataFrame, n_items: int, embed_dim: int = 64, hidden_dim: int = 64, num_layers: int = 1, dropout: float = 0.3, max_seq_len: int = 100,
     n_epochs: int = 100, batch_size: int = 1024, lr: float = 5e-4, weight_decay: float = 1e-6, device: str = "cpu", verbose: bool = True) -> tuple[GRU4Rec, dict[int, list[int]]]:
-    """Train GRU4Rec with next-item cross-entropy.
+    """Train a GRU4Rec model with next-item cross-entropy loss.
 
-    Returns: (model, full per-user sequences) — sequences are reused at inference.
+    Args:
+        train_df (pd.DataFrame): Interactions with columns [user_id, item_id, timestamp].
+        n_items (int): Size of the item embedding table (max item_id in data).
+        embed_dim (int): Item embedding dimension.
+        hidden_dim (int): GRU hidden state dimension.
+        num_layers (int): Number of GRU layers.
+        dropout (float): Dropout probability.
+        max_seq_len (int): Maximum per-user sequence length.
+        n_epochs (int): Number of training epochs.
+        batch_size (int): Number of user sequences per minibatch.
+        lr (float): Adam learning rate.
+        weight_decay (float): L2 regularization coefficient.
+        device (str): Torch device string.
+        verbose (bool): Print per-epoch loss if True.
+
+    Returns:
+        (tuple[GRU4Rec, dict[int, list[int]]]): Trained model and full per-user sequences,
+            reused at inference.
     """
     sequences = build_user_sequences(train_df, max_seq_len=max_seq_len)
     train_seqs = {u: s for u, s in sequences.items() if len(s) >= 2}
@@ -119,7 +171,9 @@ def train_gru4rec(train_df: pd.DataFrame, n_items: int, embed_dim: int = 64, hid
 
 
 class GRU4RecRecommender:
-    """Wraps a trained GRU4Rec as a `(user_id, seen_items, k) -> list[int]` callable."""
+    """Wraps a trained GRU4Rec as a `(user_id, seen_items, k) -> list[int]` callable
+    compatible with `evaluate.evaluate_model` and the ensemble.
+    """
 
     def __init__(self, model: GRU4Rec, sequences: dict[int, list[int]], device: str = "cpu"):
         self.model = model.eval()
@@ -128,10 +182,16 @@ class GRU4RecRecommender:
 
     @torch.no_grad()
     def score_user(self, user_id: int) -> torch.Tensor:
-        """Return raw (un-masked) score for every item index for one user.
+        """Return raw scores over all item indices for a single user.
 
-        Cold users (no train history) get the same formula as the batched path:
-        feed a single padding token through the GRU and use its projected output.
+        Cold users with no train history are scored by feeding a single padding
+        token through the GRU, matching the formula used in `batch_score_users`.
+
+        Args:
+            user_id (int): User to score.
+
+        Returns:
+            (torch.Tensor): 1D tensor of length n_items + 1.
         """
         seq = self.sequences.get(int(user_id), []) or [0]
         seq_t = torch.tensor([seq], dtype=torch.long, device=self.device)
@@ -139,11 +199,16 @@ class GRU4RecRecommender:
 
     @torch.no_grad()
     def batch_score_users(self, user_ids: list[int]) -> torch.Tensor:
-        """Return scores of shape (B, n_items + 1) for the given user_ids.
+        """Return scores for a batch of users.
 
         Empty-sequence users are scored with a single padding token so the whole
-        batch shares one GRU forward — this gives a "cold prior" identical to
-        what `score_user` returns for the same user.
+        batch shares one GRU forward, giving the same "cold prior" as `score_user`.
+
+        Args:
+            user_ids (list[int]): User IDs to score.
+
+        Returns:
+            (torch.Tensor): Shape (B, n_items + 1).
         """
         seqs: list[list[int]] = []
         lengths: list[int] = []
@@ -165,6 +230,16 @@ class GRU4RecRecommender:
         return self.model._logits_from_hidden(h_proj)  # (B, V)
 
     def recommend(self, user_id: int, seen_items: set, k: int = 10) -> list[int]:
+        """Recommend top-k items for a user, excluding already seen items.
+
+        Args:
+            user_id (int): Target user.
+            seen_items (set): Item IDs to exclude.
+            k (int): Number of items to return.
+
+        Returns:
+            (list[int]): Top-k item IDs.
+        """
         scores = self.score_user(user_id)
         scores[0] = float("-inf")
         if seen_items:
