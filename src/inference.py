@@ -82,13 +82,13 @@ def batch_predict_topk(components: list[tuple[str, object]], weights: tuple[floa
             scores = recommender.batch_score_users(batch_users).float().to(device)
             component_scores.append(minmax_normalize_rows(scores))
 
-        seen_mask = build_seen_mask(batch_users, seen_per_user, component_scores[0])
-
+        # seen_mask = build_seen_mask(batch_users, seen_per_user, component_scores[0])
         combined_scores = torch.zeros_like(component_scores[0])
+        
         for weight, scores in zip(weights, component_scores):
             if weight != 0:
                 combined_scores = combined_scores + weight * scores
-        combined_scores = combined_scores + seen_mask
+        # combined_scores = combined_scores + seen_mask
 
         top_k_indices = torch.topk(combined_scores, k, dim=-1).indices.cpu().numpy()
         for i, user_id in enumerate(batch_users):

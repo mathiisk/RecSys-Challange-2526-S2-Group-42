@@ -69,7 +69,7 @@ def main(bpr_epochs: int = 150, gru_epochs: int = 150, lightgcn_epochs: int = 20
 
     # ====================================================================BPR 
     t0 = time.time()
-    print(f"\n[1/3] training BPR-MF ({bpr_epochs} epochs)...")
+    print(f"\n[1/4] training BPR-MF ({bpr_epochs} epochs)...")
     bpr_model = train_bpr(train_df, n_users, n_items,
         dim=bpr_dim, n_epochs=bpr_epochs, batch_size=1024,
         lr=1e-3, weight_decay=1e-5, device=device, verbose=True,
@@ -78,7 +78,7 @@ def main(bpr_epochs: int = 150, gru_epochs: int = 150, lightgcn_epochs: int = 20
 
     # ===================================================================GRU4REC
     t0 = time.time()
-    print(f"[2/3] training GRU4Rec ({gru_epochs} epochs)...")
+    print(f"[2/4] training GRU4Rec ({gru_epochs} epochs)...")
     gru_model, gru_sequences = train_gru4rec(
         train_df, n_items,
         embed_dim=gru_embed_dim, hidden_dim=gru_hidden_dim,

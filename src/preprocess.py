@@ -75,6 +75,7 @@ def save_processed(train_split_df: pd.DataFrame, val_df: pd.DataFrame, test_df: 
     
 if __name__ == "__main__":
     train_df, test_df, item_meta_df = load_raw_data(DATA_DIR)
+    train_df = pd.concat([train_df, test_df], ignore_index=True)
     # train_df = deduplicate_interactions(train_df)
     train_split_df, val_df = split_leave_one_out(train_df)
     save_processed(train_split_df, val_df, test_df, OUTPUT_DIR)
