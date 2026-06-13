@@ -1,8 +1,9 @@
-"""Hyperparameter sweep for BPR and GRU4Rec, and ensemble weight sweep.
+"""Hyperparameter sweep for BPR, GRU4Rec, and LightGCN, and ensemble weight sweep.
 
 CLI:
     python sweep.py --bpr-only
     python sweep.py --gru-only
+    python sweep.py --lightgcn-only
     python sweep.py --weights-only --load checkpoints/final
     python sweep.py --output results/sweep_v1.csv
 """
@@ -18,7 +19,7 @@ import torch
 
 from bpr import train_bpr, BPRRecommender, BPRMF
 from gru4rec import train_gru4rec, GRU4RecRecommender, GRU4Rec
-from lightgcn import LightGCNRecommender, LightGCN
+from lightgcn import train_lightgcn, LightGCNRecommender, LightGCN
 from popularity import PopularityRecommender
 from evaluate import evaluate_model
 from ensemble import chunked_ensemble_sweep
@@ -38,6 +39,13 @@ GRU_GRID = {
     "dropout":     [0.1, 0.2, 0.3],
     "n_epochs":    [100, 150],
     "max_seq_len": [50, 100],
+}
+
+LIGHTGCN_GRID = {
+    "dim":      [64, 128],
+    "n_layers": [2, 3],
+    "lr":       [1e-4, 5e-4, 1e-3],
+    "n_epochs": [30, 50],
 }
 
 
@@ -114,6 +122,36 @@ def sweep_gru(train_df: pd.DataFrame, val_df: pd.DataFrame, n_items: int, device
     return sorted(results, key=lambda x: x["recall@10"], reverse=True)
 
 
+def sweep_lightgcn(train_df: pd.DataFrame, val_df: pd.DataFrame, n_users: int, n_items: int, device: str) -> list[dict]:
+    """Sweep LightGCN hyperparameters and return results sorted by recall.
+
+    Args:
+        train_df (pd.DataFrame): Training interactions.
+        val_df (pd.DataFrame): Validation interactions.
+        n_users (int): Maximum user ID.
+        n_items (int): Maximum item ID.
+        device (str): Torch device string.
+
+    Returns:
+        (list[dict]): Results sorted by recall@10 descending.
+    """
+    combos = dict_combinations(LIGHTGCN_GRID)
+    results = []
+    print(f"\n=== LightGCN sweep: {len(combos)} combinations ===")
+
+    for i, params in enumerate(combos):
+        t0 = time.time()
+        model, norm_adjacency = train_lightgcn(train_df, n_users, n_items, dim=params["dim"], n_layers=params["n_layers"],
+            n_epochs=params["n_epochs"], lr=params["lr"], batch_size=1024, weight_decay=1e-5, device=device, verbose=False)
+        rec = LightGCNRecommender(model, norm_adjacency, device=device)
+        recall = evaluate_model(lambda user_id, seen_items, k: rec.recommend(user_id, seen_items, k), val_df, train_df, k=10)
+        elapsed = time.time() - t0
+        results.append({"model": "lightgcn", "recall@10": recall, "time_s": round(elapsed, 1), **params})
+        print(f"  [{i+1:3d}/{len(combos)}] recall={recall:.4f} | {params} | {elapsed:.1f}s")
+
+    return sorted(results, key=lambda x: x["recall@10"], reverse=True)
+
+
 def load_checkpoint_recs(checkpoint_dir: Path, device: str) -> tuple:
     """Load recommender wrappers from checkpoint saved by train.py.
 
@@ -161,7 +199,8 @@ def sweep_weights(load_dir: Path, step: float = 1.0) -> None:
     print(f"loading checkpoint from {load_dir}...")
     bpr_rec, gru_rec, lightgcn_rec, pop_rec, n_items = load_checkpoint_recs(load_dir, device)
 
-    weight_values = [float(w) for w in range(0, 11)]
+    weight_values = [float(w) for w in range(0, int(10.0 / step) + 1)]
+    weight_values = [round(w * step, 2) for w in range(0, int(10.0 / step) + 1)]
     weight_grid = [
         (bpr, gru, lgcn, pop)
         for bpr, gru, lgcn, pop in itertools.product(weight_values, weight_values, weight_values, weight_values)
@@ -183,13 +222,15 @@ def sweep_weights(load_dir: Path, step: float = 1.0) -> None:
     print(f"\nbest: --weights {','.join(str(w) for w in best_weights)}  recall={best_recall:.4f}")
 
 
-def main(sweep_bpr_flag: bool = True, sweep_gru_flag: bool = True, sweep_weights_flag: bool = False,
-    load_dir: Path | None = None, output_path: Path = Path("sweep_results.csv"), step: float = 1.0) -> None:
+def main(sweep_bpr_flag: bool = True, sweep_gru_flag: bool = True, sweep_lightgcn_flag: bool = True,
+    sweep_weights_flag: bool = False, load_dir: Path | None = None,
+    output_path: Path = Path("sweep_results.csv"), step: float = 1.0) -> None:
     """Run hyperparameter and/or weight sweeps.
 
     Args:
         sweep_bpr_flag (bool): Whether to sweep BPR hyperparameters.
         sweep_gru_flag (bool): Whether to sweep GRU4Rec hyperparameters.
+        sweep_lightgcn_flag (bool): Whether to sweep LightGCN hyperparameters.
         sweep_weights_flag (bool): Whether to sweep ensemble weights from checkpoint.
         load_dir (Path | None): Checkpoint directory, required for weight sweep.
         output_path (Path): Path to write combined hyperparam results CSV.
@@ -223,6 +264,13 @@ def main(sweep_bpr_flag: bool = True, sweep_gru_flag: bool = True, sweep_weights
         for r in gru_results[:5]:
             print(f"  recall={r['recall@10']:.4f} | hidden={r['hidden_dim']} lr={r['lr']} dropout={r['dropout']} epochs={r['n_epochs']} seq={r['max_seq_len']}")
 
+    if sweep_lightgcn_flag:
+        lightgcn_results = sweep_lightgcn(train_df, val_df, n_users, n_items, device)
+        all_results.extend(lightgcn_results)
+        print(f"\n--- LightGCN top 5 ---")
+        for r in lightgcn_results[:5]:
+            print(f"  recall={r['recall@10']:.4f} | dim={r['dim']} layers={r['n_layers']} lr={r['lr']} epochs={r['n_epochs']}")
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(all_results).to_csv(output_path, index=False)
     print(f"\nsaved {len(all_results)} results to {output_path}")
@@ -232,15 +280,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--bpr-only", action="store_true")
     parser.add_argument("--gru-only", action="store_true")
+    parser.add_argument("--lightgcn-only", action="store_true")
     parser.add_argument("--weights-only", action="store_true")
     parser.add_argument("--load", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("sweep_results.csv"))
     parser.add_argument("--step", type=float, default=1.0)
     args = parser.parse_args()
 
+    only_flags = [args.bpr_only, args.gru_only, args.lightgcn_only, args.weights_only]
+
     main(
-        sweep_bpr_flag=not args.gru_only and not args.weights_only,
-        sweep_gru_flag=not args.bpr_only and not args.weights_only,
+        sweep_bpr_flag=not any(only_flags) or args.bpr_only,
+        sweep_gru_flag=not any(only_flags) or args.gru_only,
+        sweep_lightgcn_flag=not any(only_flags) or args.lightgcn_only,
         sweep_weights_flag=args.weights_only,
         load_dir=args.load,
         output_path=args.output,

@@ -114,8 +114,8 @@ def build_norm_adjacency(train_df: pd.DataFrame, n_users: int, n_items: int, dev
     return norm_adjacency
 
 
-def train_lightgcn(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 64, n_layers: int = 2, n_epochs: int = 20, batch_size: int = 1024,
-    lr: float = 1e-4, weight_decay: float = 1e-5, device: str = "cpu", verbose: bool = True) -> tuple[LightGCN, torch.Tensor]:
+def train_lightgcn(train_df: pd.DataFrame, n_users: int, n_items: int, dim: int = 64, n_layers: int = 2, n_epochs: int = 50, batch_size: int = 1024,
+    lr: float = 1e-3, weight_decay: float = 1e-5, device: str = "cpu", verbose: bool = True) -> tuple[LightGCN, torch.Tensor]:
     """Train LightGCN with BPR loss on user-item interactions.
 
     Args:
@@ -268,8 +268,8 @@ if __name__ == "__main__":
 
     model, norm_adjacency = train_lightgcn(
         train_df, n_users, n_items,
-        dim=64, n_layers=2, n_epochs=20, batch_size=1024,
-        lr=1e-4, weight_decay=1e-5, device=device,
+        dim=64, n_layers=2, n_epochs=50, batch_size=1024,
+        lr=1e-3, weight_decay=1e-5, device=device,
     )
 
     rec = LightGCNRecommender(model, norm_adjacency, device=device)
