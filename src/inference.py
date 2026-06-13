@@ -146,7 +146,7 @@ def main(load_dir: Path,weights: tuple[float, float, float],output_path: Path = 
     seen_per_user = full_train.groupby("user_id")["item_id"].apply(set).to_dict()
 
     print(f"predicting top-{k} for {len(submission_user_ids)} users "
-          f"with weights BPR={weights[0]}, GRU={weights[1]}, POP={weights[2]}...")
+          f"with weights BPR={weights[0]}, GRU={weights[1]}, GCN={weights[2]}, POP={weights[3]}...")
     t0 = time.time()
     predictions = batch_predict_topk(
         components, weights, submission_user_ids, seen_per_user,

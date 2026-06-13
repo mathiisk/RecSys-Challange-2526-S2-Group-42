@@ -1,11 +1,9 @@
 """Hyperparameter sweep for BPR, GRU4Rec, and LightGCN, and ensemble weight sweep.
-
-CLI:
-    python sweep.py --bpr-only
-    python sweep.py --gru-only
-    python sweep.py --lightgcn-only
-    python sweep.py --weights-only --load checkpoints/final
-    python sweep.py --output results/sweep_v1.csv
+    python src/sweep.py --bpr-only
+    python src/sweep.py --gru-only
+    python src/sweep.py --lightgcn-only
+    python src/sweep.py --weights-only --load checkpoints/final
+    python srcsweep.py --output results/sweep_v1.csv
 """
 import argparse
 import itertools
