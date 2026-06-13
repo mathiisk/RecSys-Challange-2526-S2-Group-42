@@ -1,7 +1,4 @@
 .vscode
 __pycache__
-checkpoints\
-*.pt
-*.pkl
 
 notebooks\
